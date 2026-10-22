@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Погода с реакциями</title>
+<style>
+:root{--page:#dfe6ee;--tx:#fff;--tx2:rgba(255,255,255,.62);--line:rgba(255,255,255,.14);--panel:rgba(20,36,52,.42);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--page:#0b1118}}
+:root[data-theme="dark"]{--page:#0b1118}
+*{box-sizing:border-box}
+html,body{margin:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tx);min-height:100%}
+.screen{max-width:440px;margin:0 auto;min-height:100vh;padding:28px 14px 32px;background:var(--bg,linear-gradient(#4b6174,#2c3e50));transition:background .4s}
+.top{text-align:center;margin-bottom:22px}
+select{appearance:none;background:transparent;border:0;color:var(--tx);font:300 38px/1.1 system-ui,sans-serif;text-align:center;text-align-last:center;max-width:100%;cursor:pointer;padding:4px 8px;border-radius:10px}
+select option{color:#102030;font-size:16px}
+select:focus-visible,.row:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.now{font-size:19px;margin-top:2px}
+.now b{font-weight:500}
+.panel{background:var(--panel);border-radius:18px;padding:6px 12px 8px;backdrop-filter:blur(8px)}
+.head{font-size:13px;color:var(--tx2);padding:10px 2px 8px;border-bottom:1px solid var(--line)}
+.item{border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.row{all:unset;box-sizing:border-box;display:grid;grid-template-columns:44px 62px 34px 30px 1fr 30px;align-items:center;gap:8px;width:100%;padding:8px 2px;cursor:pointer;font-size:17px}
+.face{width:40px;height:40px;border-radius:9px;background:rgba(255,255,255,.9);display:grid;place-items:center;font-size:26px;transition:transform .2s}
+.row:active .face{transform:scale(1.15) rotate(-6deg)}
+.day{font-weight:500}
+.ic{text-align:center;font-size:22px;line-height:1}
+.ic small{display:block;font-size:11px;font-weight:600;color:#6cc7f5;margin-top:1px}
+.lo{color:var(--tx2);text-align:right}
+.hi{text-align:left}
+.bar{position:relative;height:5px;border-radius:3px;background:rgba(255,255,255,.18)}
+.bar i{position:absolute;top:0;bottom:0;border-radius:3px;background:linear-gradient(90deg,#5ad0d6,#e6d85a)}
+.cap{margin:0 2px 10px 52px;padding:9px 12px;border-radius:12px;background:rgba(255,255,255,.12);font-size:15px;line-height:1.35}
+.foot{margin:16px 4px 0;font-size:12.5px;color:var(--tx2);text-align:center;line-height:1.4}
+.snd{all:unset;box-sizing:border-box;display:inline-block;margin-top:14px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.16);font-size:14px;cursor:pointer}
+.snd:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.hint{font-size:12.5px;color:var(--tx2);margin-top:6px;min-height:16px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="screen" id="screen">
+  <div class="top">
+    <select id="city" aria-label="Город"></select>
+    <div class="now" id="now"></div>
+    <button class="snd" id="snd" type="button">🎵 Звук для солнечных дней</button>
+    <input type="file" id="file" accept="audio/*,video/*" hidden>
+    <button class="snd" id="snd-rain" type="button">🌧️ Звуки для дождя</button>
+    <input type="file" id="file-rain" accept="audio/*,video/*" multiple hidden>
+    <div class="hint" id="hint"></div>
+  </div>
+  <section class="panel">
+    <div class="head">Прогноз на 10 дней · нажми на лицо</div>
+    <div id="list"></div>
+  </section>
+  <p class="foot" id="foot"></p>
+</main>
+<script>
+const COND={
+  sun:{i:'☀️',t:'Ясно',bg:'linear-gradient(#3f7fb8,#27547e)',face:'😎',caps:['Солнце есть — настроение есть.','Очки на нос и вперёд.','Сегодня без драмы, просто красота.']},
+  cloud:{i:'⛅',t:'Облачно',bg:'linear-gradient(#5d6f80,#34424f)',face:'😐',caps:['Ни то ни сё, как моё воскресенье.','Небо думает, что делать. Я тоже.','Серенько, но терпимо.']},
+  rain:{i:'🌧️',t:'Дождь',bg:'linear-gradient(#4a5b6b,#26323d)',face:'😭',caps:['Зонт опять дома. Классика.','Дождь пошёл — настроение ушло.','Ну всё, носки мокрые.']},
+  storm:{i:'⛈️',t:'Местами грозы',bg:'linear-gradient(#46566a,#222d3a)',face:'😱',caps:['Гром! Я не готов!','Это не погода, это спецэффекты.','Сидим дома, пьём чай.']},
+  snow:{i:'🌨️',t:'Снег',bg:'linear-gradient(#7d93aa,#4a5f75)',face:'🥶',caps:['Я не замёрз, я просто дрожу красиво.','Снеговик, ты где?','Шапку. Срочно шапку.']}
+};
+const HOT={face:'🥵',caps:['Я таю, передайте вентилятор.','Плавлюсь. Не трогайте меня.','Кто включил это солнце на максимум?']};
+const CITIES={
+  'Ереван':{lat:40.18,lon:44.51,real:'Реальный прогноз AccuWeather на 22 октября 2026, обновляется вручную.',now:11,cond:'storm',lo:7,hi:18,mix:['sun'],seed:1,fixed:[[7,16,'storm',62],[7,17,'sun',0],[8,18,'sun',0],[8,16,'storm',55],[7,16,'sun',0],[7,18,'cloud',0],[9,21,'cloud',0],[11,19,'storm',55],[9,19,'cloud',25],[3,14,'rain',56]]},
+  'Москва':{lat:55.75,lon:37.62,now:6,cond:'cloud',lo:1,hi:8,mix:['cloud','cloud','rain','rain','snow'],seed:3,fixed:[]},
+  'Дубай':{lat:25.2,lon:55.27,now:35,cond:'sun',lo:27,hi:38,mix:['sun','sun','sun','sun','cloud'],seed:11,fixed:[]},
+  'Рейкьявик':{lat:64.15,lon:-21.94,now:3,cond:'rain',lo:0,hi:6,mix:['rain','rain','snow','cloud','storm'],seed:5,fixed:[]},
+  'Тбилиси':{lat:41.72,lon:44.79,now:15,cond:'cloud',lo:7,hi:19,mix:['sun','cloud','cloud','rain'],seed:9,fixed:[]}
+};
+const WD=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+function build(c){
+  let s=c.seed;const r=()=>{s=(s*9301+49297)%233280;return s/233280};
+  const out=c.fixed.map(d=>({lo:d[0],hi:d[1],cond:d[2],p:d[3]}));
+  while(out.length<10){
+    const cond=c.mix[Math.floor(r()*c.mix.length)];
+    const lo=Math.round(c.lo+r()*4-2),hi=Math.round(c.hi+r()*5-2.5);
+    out.push({lo:lo,hi:Math.max(hi,lo+3),cond:cond,p:(cond==='sun'||cond==='cloud')?0:Math.round((30+r()*60)/10)*10});
+  }
+  return out;
+}
+const sel=document.getElementById('city'),list=document.getElementById('list');
+Object.keys(CITIES).forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o)});
+let saved=null;try{saved=localStorage.getItem('wx-city')}catch(e){}
+if(saved&&CITIES[saved])sel.value=saved;
+function pick(a){return a[Math.floor(Math.random()*a.length)]}
+function render(){
+  const name=sel.value,c=CITIES[name],days=c.live||build(c);
+  document.getElementById('foot').textContent=(c.real||'Демо-данные: прогноз не настоящий.')+' Лица — эмодзи вместо людей из видео.';
+  try{localStorage.setItem('wx-city',name)}catch(e){}
+  const k=COND[c.cond];
+  document.getElementById('screen').style.setProperty('--bg',k.bg);
+  document.getElementById('now').innerHTML=c.now+'° | <b>'+k.t+'</b>';
+  const gMin=Math.min.apply(null,days.map(d=>d.lo)),gMax=Math.max.apply(null,days.map(d=>d.hi)),span=Math.max(gMax-gMin,1);
+  const t0=new Date().getDay();
+  list.innerHTML=days.map((d,i)=>{
+    const k=COND[d.cond],hot=d.hi>=32&&d.cond==='sun';
+    const face=hot?HOT.face:k.face;
+    const left=((d.lo-gMin)/span*100).toFixed(1),w=((d.hi-d.lo)/span*100).toFixed(1);
+    const pc=d.p?'<small>'+d.p+' %</small>':'';
+    return '<div class="item"><button class="row" data-i="'+i+'" aria-expanded="false">'
+      +'<span class="face" aria-hidden="true">'+face+'</span>'
+      +'<span class="day">'+(i===0?'Сегодня':WD[(t0+i)%7])+'</span>'
+      +'<span class="ic">'+k.i+pc+'</span>'
+      +'<span class="lo">'+d.lo+'°</span>'
+      +'<span class="bar"><i style="left:'+left+'%;width:'+w+'%"></i></span>'
+      +'<span class="hi">'+d.hi+'°</span></button></div>';
+  }).join('');
+  list.querySelectorAll('.row').forEach(b=>b.addEventListener('click',()=>{
+    const item=b.parentNode,old=item.querySelector('.cap'),d=days[+b.dataset.i];
+    if(old){old.remove();b.setAttribute('aria-expanded','false');stopSun();stopRain();return}
+    if(d.cond==='sun'){stopRain();playSun()}else if(d.cond==='rain'||d.cond==='storm'){stopSun();playRain()}else{stopSun();stopRain()}
+    const p=document.createElement('div');p.className='cap';
+    p.textContent=pick((d.hi>=32&&d.cond==='sun'?HOT:COND[d.cond]).caps);
+    item.appendChild(p);b.setAttribute('aria-expanded','true');
+  }));
+}
+const au=new Audio();let sunUrl=null;
+const hint=document.getElementById('hint'),snd=document.getElementById('snd'),fileIn=document.getElementById('file');
+function idb(){return new Promise((res,rej)=>{const q=indexedDB.open('wx-sound',1);q.onupgradeneeded=()=>q.result.createObjectStore('s');q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+async function saveSnd(f){try{const db=await idb();db.transaction('s','readwrite').objectStore('s').put(f,'sun')}catch(e){}}
+async function loadSnd(){try{const db=await idb();const q=db.transaction('s').objectStore('s').get('sun');q.onsuccess=()=>{if(q.result)useSnd(q.result)}}catch(e){}}
+function useSnd(f){if(sunUrl)URL.revokeObjectURL(sunUrl);sunUrl=URL.createObjectURL(f);au.src=sunUrl;hint.textContent='Играет при нажатии на солнечный день: '+(f.name||'файл')}
+function tryFiles(a,base){const ex=['.mp4','.mov','.m4a','.mp3'];let i=0;const next=()=>{if(i>=ex.length){a.onerror=null;return}a.src=base+ex[i++];a.play().catch(()=>{})};a.onerror=next;next()}
+function playSun(){if(sunUrl){au.onerror=null;au.play().catch(()=>{})}else tryFiles(au,'sun')}
+function stopSun(){au.pause()}
+snd.addEventListener('click',()=>fileIn.click());
+fileIn.addEventListener('change',()=>{const f=fileIn.files[0];if(!f)return;useSnd(f);saveSnd(f);playSun()});
+hint.textContent='Выбери файл со звуком: он остаётся на твоём устройстве.';
+loadSnd();
+const rau=new Audio();let rainUrls=[],rainI=0;
+const rfile=document.getElementById('file-rain'),rbtn=document.getElementById('snd-rain');
+async function saveRain(a){try{const db=await idb();db.transaction('s','readwrite').objectStore('s').put(a,'rain')}catch(e){}}
+async function loadRain(){try{const db=await idb();const q=db.transaction('s').objectStore('s').get('rain');q.onsuccess=()=>{if(q.result&&q.result.length)useRain(q.result)}}catch(e){}}
+function useRain(a){rainUrls.forEach(u=>URL.revokeObjectURL(u));rainUrls=a.map(f=>URL.createObjectURL(f));rainI=0;hint.textContent='Для дождя загружено файлов: '+a.length}
+function playRain(){if(rainUrls.length){rau.onerror=null;rau.src=rainUrls[rainI%rainUrls.length];rainI++;rau.play().catch(()=>{});return}tryFiles(rau,'rain'+(1+rainI%2));rainI++}
+function stopRain(){rau.pause()}
+rbtn.addEventListener('click',()=>rfile.click());
+rfile.addEventListener('change',()=>{const a=Array.from(rfile.files);if(!a.length)return;useRain(a);saveRain(a);playRain()});
+loadRain();
+const WMO=k=>k<=1?'sun':(k<=3||k===45||k===48)?'cloud':k>=95?'storm':((k>=71&&k<=77)||k===85||k===86)?'snow':'rain';
+async function goLive(name){
+  const c=CITIES[name];if(!c.lat||c.live||c.busy)return;c.busy=true;
+  try{
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+c.lat+'&longitude='+c.lon+'&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=10');
+    if(!r.ok)throw new Error('http');
+    const j=await r.json(),d=j.daily;
+    c.live=d.time.map((t,i)=>{const cond=WMO(d.weather_code[i]);return{lo:Math.round(d.temperature_2m_min[i]),hi:Math.round(d.temperature_2m_max[i]),cond:cond,p:(cond==='sun'||cond==='cloud')?0:(d.precipitation_probability_max[i]||0)}});
+    c.now=Math.round(j.current.temperature_2m);c.cond=c.live[0].cond;
+    c.real='Живой прогноз Open-Meteo, обновлён в '+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'.';
+    if(sel.value===name)render();
+  }catch(e){}
+  c.busy=false;
+}
+sel.addEventListener('change',()=>{render();goLive(sel.value)});
+render();goLive(sel.value);
+</script>
+</body>
+</html>
