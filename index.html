@@ -127,7 +127,7 @@ function idb(){return new Promise((res,rej)=>{const q=indexedDB.open('wx-sound',
 async function saveSnd(f){try{const db=await idb();db.transaction('s','readwrite').objectStore('s').put(f,'sun')}catch(e){}}
 async function loadSnd(){try{const db=await idb();const q=db.transaction('s').objectStore('s').get('sun');q.onsuccess=()=>{if(q.result)useSnd(q.result)}}catch(e){}}
 function useSnd(f){if(sunUrl)URL.revokeObjectURL(sunUrl);sunUrl=URL.createObjectURL(f);au.src=sunUrl;hint.textContent='Играет при нажатии на солнечный день: '+(f.name||'файл')}
-function tryFiles(a,base){const ex=['.mp4','.mov','.m4a','.mp3'];let i=0;const next=()=>{if(i>=ex.length){a.onerror=null;return}a.src=base+ex[i++];a.play().catch(()=>{})};a.onerror=next;next()}
+function tryFiles(a,base){const C=base[0].toUpperCase()+base.slice(1),L=[C+'.MP4',base+'.mp4',C+'.mp4',base+'.MP4',C+'.MOV',base+'.mov',C+'.mov',base+'.MOV',base+'.m4a',base+'.mp3'];let i=0;const next=()=>{if(i>=L.length){a.onerror=null;return}a.src=L[i++];a.play().catch(()=>{})};a.onerror=next;next()}
 function playSun(){if(sunUrl){au.onerror=null;au.play().catch(()=>{})}else tryFiles(au,'sun')}
 function stopSun(){au.pause()}
 snd.addEventListener('click',()=>fileIn.click());
