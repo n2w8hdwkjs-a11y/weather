@@ -115,7 +115,7 @@ function render(){
   list.querySelectorAll('.row').forEach(b=>b.addEventListener('click',()=>{
     const item=b.parentNode,old=item.querySelector('.cap'),d=days[+b.dataset.i];
     if(old){old.remove();b.setAttribute('aria-expanded','false');stopSun();stopRain();return}
-    if(d.cond==='sun'){stopRain();playSun()}else if(d.cond==='rain'||d.cond==='storm'){stopSun();playRain()}else{stopSun();stopRain()}
+    if(d.cond==='sun'||d.cond==='cloud'){stopRain();playSun()}else if(d.cond==='rain'||d.cond==='storm'){stopSun();playRain()}else{stopSun();stopRain()}
     const p=document.createElement('div');p.className='cap';
     p.textContent=pick((d.hi>=32&&d.cond==='sun'?HOT:COND[d.cond]).caps);
     item.appendChild(p);b.setAttribute('aria-expanded','true');
